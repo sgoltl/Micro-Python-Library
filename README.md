@@ -1,0 +1,1 @@
+This libary was created with the help of ChatGPT for a 2 inch 320x240 st7789 controled LCD for the use on a Raspberry Pi Pico and Micropython. The example file shows the different methods available with the library.
