@@ -40,6 +40,102 @@ COLOR_MODE_18BIT = 0x06
 COLOR_MODE_16M = 0x07
 
 class ST7789:
+
+    COLORS = {
+        "BLACK": 0x0000,
+        "WHITE": 0xFFFF,
+        "RED": 0x07E0,   
+        "GREEN": 0x001F,  
+        "BLUE": 0xF800,
+        "YELLOW": 0x07FF,
+        "CYAN": 0xF81F,       
+        "PURPLE": 0x79E0,        
+        "GRAY": 0x8410,       
+        "DARK_GRAY": 0x4208,
+    }
+
+
+
+
+    def draw_centered_text(self, y, text, scale, color):
+        """
+        Draw text centered on the screen.
+        """
+        text_width = len(text) * 8 * scale
+        x = (self.width - text_width) // 2
+        self.draw_big_text(x, y, text, scale, color)
+
+    def draw_outlined_text(self, x, y, text, scale, color, outline_color):
+        """
+        Draw outlined text for better readability.
+        """
+        offsets = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+        for dx, dy in offsets:
+            self.draw_big_text(x + dx, y + dy, text, scale, outline_color)
+        self.draw_big_text(x, y, text, scale, color)
+
+    def draw_multiline_text(self, x, y, text, scale, color, max_width=None):
+        """
+        Draw text with automatic line wrapping.
+        """
+        if max_width is None:
+            max_width = self.width
+
+        words = text.split()
+        lines = []
+        current_line = ""
+
+        for word in words:
+            test_line = current_line + " " + word if current_line else word
+            if len(test_line) * 8 * scale <= max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+
+        if current_line:
+            lines.append(current_line)
+
+        for i, line in enumerate(lines):
+            self.draw_big_text(x, y + (i * 10 * scale), line, scale, color)
+
+    def draw_sprite(self, x, y, sprite, scale, color):
+        """
+        Draw a sprite (scale=2) on the LCD.
+        """
+        #scale = 2
+        for row, line in enumerate(sprite):
+            for col, pixel in enumerate(line):
+                if pixel == "1":
+                    self.framebuf.fill_rect(x + col * scale, y + row * scale, scale, scale, color)
+    
+    def draw_big_text(self, x, y, text, scale, color):
+        """
+        Draw bigger text by scaling the built-in 8x8 font.
+        Renders each character into a small buffer, then scales that buffer.
+        """
+        char_width, char_height = 8, 8
+        temp_buf = framebuf.FrameBuffer(
+            bytearray(char_width * char_height * 2),
+            char_width, char_height,
+            framebuf.RGB565
+        )
+
+        offset_x = x
+        for char in text:
+            temp_buf.fill(0)
+            temp_buf.text(char, 0, 0, color)
+            for cy in range(char_height):
+                for cx in range(char_width):
+                    px_color = temp_buf.pixel(cx, cy)
+                    if px_color != 0:
+                        for sy in range(scale):
+                            for sx in range(scale):
+                                self.framebuf.pixel(offset_x + cx * scale + sx,
+                                                    y + cy * scale + sy,
+                                                    px_color)
+            offset_x += char_width * scale
+    
     def __init__(self, spi, cs, dc, rst, width=320, height=240):
         self.spi = spi
         self.cs = cs
@@ -227,16 +323,20 @@ class ST7789:
                     a, b = b, a
                 draw_line(a, y, b, y)
 
+
     def draw_circle(self, x0, y0, r, color):
+        x0, y0, r = int(x0), int(y0), int(r)  # Ensure all inputs are integers
         f = 1 - r
         ddF_x = 1
         ddF_y = -2 * r
         x = 0
         y = r
+
         self.framebuf.pixel(x0, y0 + r, color)
         self.framebuf.pixel(x0, y0 - r, color)
         self.framebuf.pixel(x0 + r, y0, color)
         self.framebuf.pixel(x0 - r, y0, color)
+
         while x < y:
             if f >= 0:
                 y -= 1
@@ -245,38 +345,17 @@ class ST7789:
             x += 1
             ddF_x += 2
             f += ddF_x
-            self.framebuf.pixel(x0 + x, y0 + y, color)
-            self.framebuf.pixel(x0 - x, y0 + y, color)
-            self.framebuf.pixel(x0 + x, y0 - y, color)
-            self.framebuf.pixel(x0 - x, y0 - y, color)
-            self.framebuf.pixel(x0 + y, y0 + x, color)
-            self.framebuf.pixel(x0 - y, y0 + x, color)
-            self.framebuf.pixel(x0 + y, y0 - x, color)
-            self.framebuf.pixel(x0 - y, y0 - x, color)
 
-    def fill_circle(self, x0, y0, r, color):
-        self.draw_line(x0, y0 - r, x0, y0 + r, color)
-        f = 1 - r
-        ddF_x = 1
-        ddF_y = -2 * r
-        x = 0
-        y = r
-        while x < y:
-            if f >= 0:
-                y -= 1
-                ddF_y += 2
-                f += ddF_y
-            x += 1
-            ddF_x += 2
-            f += ddF_x
-            self.draw_line(x0 + x, y0 - y, x0 + x, y0 + y, color)
-            self.draw_line(x0 - x, y0 - y, x0 - x, y0 + y, color)
-            self.draw_line(x0 + y, y0 - x, x0 + y, y0 + x, color)
-            self.draw_line(x0 - y, y0 - x, x0 - y, y0 + x, color)
+            # Ensure integer conversion before using pixel function
+            self.framebuf.pixel(int(x0 + x), int(y0 + y), color)
+            self.framebuf.pixel(int(x0 - x), int(y0 + y), color)
+            self.framebuf.pixel(int(x0 + x), int(y0 - y), color)
+            self.framebuf.pixel(int(x0 - x), int(y0 - y), color)
+            self.framebuf.pixel(int(x0 + y), int(y0 + x), color)
+            self.framebuf.pixel(int(x0 - y), int(y0 + x), color)
+            self.framebuf.pixel(int(x0 + y), int(y0 - x), color)
+            self.framebuf.pixel(int(x0 - y), int(y0 - x), color)
 
-    def draw_image(self, x, y, img_data, img_width, img_height):
-        for j in range(img_height):
-            for i in range(img_width):
-                color = img_data[j * img_width + i]
-                self.draw_pixel(x + i, y + j, color)
+
+
 
